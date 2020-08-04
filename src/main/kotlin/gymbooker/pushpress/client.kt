@@ -70,7 +70,7 @@ class Client(
             throw Exception("err getting schedule entry : $e")
         }
 
-        println("found schedule entry $scheduleEntry")
+        if (debugAll) println("found schedule entry $scheduleEntry")
 
         if (scheduleEntry.notAvailable) return BookingResponseCode.NOT_AVAILABLE
 
@@ -85,42 +85,37 @@ class Client(
     }
 
     private fun authIfRequired() {
-        while (true) {
-            // check login status
-            try {
-                println("checking auth")
-                if (hasAuth()) {
-                    println("auth still ok")
-                    return
-                }
-            } catch (e: Exception) {
-                println("err checking auth : $e")
-                Thread.sleep(5000)
-                continue
+        // check login status
+        try {
+            if (debugAll) println("checking auth")
+            if (hasAuth()) {
+                if (debugAll) println("auth still ok")
+                return
             }
+        } catch (e: Exception) {
+            Thread.sleep(5000)
+            throw Exception("err checking auth : $e")
+        }
 
-            // auth
-            try {
-                println("doing auth")
-                auth()
-            } catch (e: Exception) {
-                println("err doing auth : $e")
-                Thread.sleep(5000)
-                continue
-            }
+        // auth
+        try {
+            if (debugAll) println("doing auth")
+            auth()
+        } catch (e: Exception) {
+            Thread.sleep(5000)
+            throw Exception("err doing auth : $e")
+        }
 
-            // check if has auth now
-            println("checking auth after successful auth")
-            try {
-                if (hasAuth()) {
-                    println("auth ok")
-                    return
-                }
-            } catch (e: Exception) {
-                println("err checking auth after successful auth : $e")
-                Thread.sleep(5000)
-                continue
+        // check if has auth now
+        if (debugAll) println("checking auth after successful auth")
+        try {
+            if (hasAuth()) {
+                if (debugAll) println("auth ok")
+                return
             }
+        } catch (e: Exception) {
+            Thread.sleep(5000)
+            throw Exception("err checking auth after successful auth : $e")
         }
     }
 
@@ -283,7 +278,7 @@ class Client(
             ?.trim()
             ?: throw Exception("no cookie or no php session id in cookie found")
 
-        println("new php session id is $phpSessionId")
+        if (debugAll) println("new php session id is $phpSessionId")
     }
 
     private fun Request.Builder.withPhpSessionId(): Request.Builder {

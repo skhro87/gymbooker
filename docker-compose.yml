@@ -1,0 +1,16 @@
+version: '2'
+
+services:
+  gymbookers:
+    image: skhro87/gymbooker
+    build:
+      context: .
+    volumes:
+      - ./config_example.json:/app/config.json
+    environment:
+      USERNAME: "skhro87"
+      PASSWORD: "password123"
+      CLIENT_ID: "123"
+      DEBUG_ERR: "true"
+      DEBUG_ALL: "true"
+      CONFIG_PATH: "/app/config.json"
