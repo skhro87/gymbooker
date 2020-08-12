@@ -20,8 +20,7 @@ enum class BookingResponseCode {
 data class BookingReq(
     val year: Int,
     val dayOfYear: Int,
-    val hour: Int,
-    val minute: Int,
+    val time: String,
 
     var resCode: BookingResponseCode? = null
 )
@@ -62,10 +61,7 @@ class Client(
 
         // get schedule
         val scheduleEntry = try {
-            findInSchedule(
-                bookingReq.year, bookingReq.dayOfYear,
-                bookingReq.hour, bookingReq.minute
-            )
+            findInSchedule(bookingReq.year, bookingReq.dayOfYear, bookingReq.time)
         } catch (e: Exception) {
             throw Exception("err getting schedule entry : $e")
         }
@@ -164,10 +160,7 @@ class Client(
             throw Exception("unsuccessful login :\n$body")
     }
 
-    private fun findInSchedule(
-        year: Int, dayOfYear: Int,
-        hour: Int, minute: Int
-    ): ScheduleEntry {
+    private fun findInSchedule(year: Int, dayOfYear: Int, time: String): ScheduleEntry {
         // e.g. https://mvrck.members.pushpress.com/schedule/index/172/2020
         val url = "${urlGetSchedule}/${dayOfYear}/${year}"
 
@@ -209,16 +202,11 @@ class Client(
                 return@forEach
 
             // check time
-            val timeRaw = elem.selectFirst("span.hidden-xs")
+            val timeOnPage = elem.selectFirst("span.hidden-xs")
                 .text()
                 .trim()
-                .replace(" am", "")
-                .replace(" pm", "")
 
-            val hourElem = timeRaw.split(":").first().toInt()
-            val minuteElem = timeRaw.split(":").last().toInt()
-
-            if (hourElem != hour || minuteElem != minute) {
+            if (timeOnPage.replace(" ", "") != time.replace(" ", "")) {
                 return@forEach
             }
 

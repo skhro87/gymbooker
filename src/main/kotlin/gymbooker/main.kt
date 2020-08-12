@@ -4,8 +4,11 @@ import com.google.gson.Gson
 import gymbooker.pushpress.BookingReq
 import gymbooker.pushpress.BookingResponseCode
 import gymbooker.pushpress.Client
+import org.joda.time.DateTime
+import org.joda.time.DateTimeZone
+import org.joda.time.format.DateTimeFormat
 import java.io.File
-import java.util.*
+
 
 private val gson = Gson()
 
@@ -16,70 +19,95 @@ fun main() {
     val password = System.getenv("PASSWORD") ?: throw Exception("missing PASSWORD")
     val debugErr = System.getenv("DEBUG_ERR")?.toBoolean() ?: true
     val debugAll = System.getenv("DEBUG_ALL")?.toBoolean() ?: false
-    val configPath = System.getenv("CONFIG_PATH") ?: "config.json"
-
-    // load config
-    val config = try {
-        loadConfig(configPath)
-    } catch (e: Exception) {
-        Thread.sleep(5000)
-        throw Exception("err loading config file from $configPath : $e")
-    }
+    val statePath = System.getenv("STATE_PATH") ?: "state.json"
 
     // create client
     val client = Client(username, clientId, password, debugErr, debugAll)
 
     // run
     try {
-        run(config, client)
-    } catch (e : Exception) {
+        run(statePath, client, debugAll)
+    } catch (e: Exception) {
         throw Exception("err running : $e")
     }
 
     println("all done")
 }
 
-private fun run(config: GymBookerConfig, client: Client) {
-    while (config.requests.any { r ->
-            r.resCode != BookingResponseCode.BOOKED &&
-                    r.resCode != BookingResponseCode.FULL
-        })
-        config.requests.filter { r -> r.resCode == null }
-            .forEachIndexed { i, r ->
-                if (!shouldMakeReq(r)) return@forEachIndexed
+private fun run(statePath: String, client: Client, debugAll: Boolean) {
+    while (true) {
+        val state = try {
+            loadState(statePath)
+        } catch (e: Exception) {
+            println("err loading state : $e")
+            Thread.sleep(10000)
+            continue
+        }
 
-                println("starting booking request $r")
+        if (debugAll)
+            println("loaded state with ${state.requests.size} from disc at ${now()}")
 
-                config.requests[i].resCode = try {
-                    client.Book(r)
-                } catch (e: Exception) {
-                    println("err booking request $r : $e")
-                    return@forEachIndexed
+        (1..100).forEach { _ ->
+            state.requests
+                .filter { r ->
+                    r.resCode != BookingResponseCode.BOOKED &&
+                            r.resCode != BookingResponseCode.FULL
                 }
+                .forEachIndexed { i, r ->
+                    try {
+                        if (!shouldMakeReq(r, debugAll))
+                            return@forEachIndexed
+                    } catch (e: Exception) {
+                        println("err checking if should make req : $e")
+                        Thread.sleep(5000)
+                        return@forEachIndexed
+                    }
 
-                println("booking request $r result is ${r.resCode}")
+                    println("starting booking request $r")
 
-                Thread.sleep(5000)
-            }
+                    state.requests[i].resCode = try {
+                        client.Book(r)
+                    } catch (e: Exception) {
+                        println("err booking request $r : $e")
+                        return@forEachIndexed
+                    }
+
+                    println("booking request $r result is ${r.resCode}")
+
+                    writeState(statePath, state)
+
+                    Thread.sleep(1000)
+                }
+        }
+
+        Thread.sleep(500)
+    }
 }
 
-private fun shouldMakeReq(r: BookingReq): Boolean {
-    // check if need to do res
-    val now = Calendar.getInstance()
-    val nowYear = now.get(Calendar.YEAR)
-    val nowDay = now.get(Calendar.DAY_OF_YEAR)
-    val nowHour = now.get(Calendar.HOUR_OF_DAY)
-    val nowMinute = now.get(Calendar.MINUTE)
+private fun shouldMakeReq(r: BookingReq, debugAll: Boolean): Boolean {
+    val formatter = DateTimeFormat.forPattern("yyyy-D HH:mma")
+    val timeReqRaw = "${r.year}-${r.dayOfYear} ${r.time.replace(" ", "")}"
+    val timeReq = formatter.parseDateTime(timeReqRaw)
 
-    if (r.year == nowYear && r.dayOfYear == nowDay &&
-        r.hour == nowHour && r.minute == nowMinute
-    ) {
-        return true
+    val now = now()
+
+    if (debugAll) {
+        println("requested (-1 day): $timeReq")
+        println("now: $now")
     }
 
-    return false
+    return now.isAfter(timeReq)
 }
 
-private fun loadConfig(configPath: String): GymBookerConfig {
-    return gson.fromJson(File(configPath).readText(), GymBookerConfig::class.java)
+private fun loadState(statePath: String): GymBookerState {
+    return gson.fromJson(File(statePath).readText(), GymBookerState::class.java)
 }
+
+private fun writeState(statePath: String, state: GymBookerState) {
+    File(statePath).writeText(gson.toJson(state))
+}
+
+private fun now(): DateTime {
+    return DateTime(DateTimeZone.forID("Asia/Singapore"))
+}
+

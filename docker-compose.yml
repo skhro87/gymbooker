@@ -6,11 +6,12 @@ services:
     build:
       context: .
     volumes:
-      - ./config_example.json:/app/config.json
+      - ./config_example.json:/app/state.json
+      - ./debug/:/app/debug/
     environment:
       USERNAME: "skhro87"
       PASSWORD: "password123"
       CLIENT_ID: "123"
       DEBUG_ERR: "true"
       DEBUG_ALL: "true"
-      CONFIG_PATH: "/app/config.json"
+      CONFIG_PATH: "/app/state.json"

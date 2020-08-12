@@ -2,6 +2,6 @@ package gymbooker
 
 import gymbooker.pushpress.BookingReq
 
-data class GymBookerConfig(
+data class GymBookerState(
     val requests: List<BookingReq>
 )
