@@ -14,7 +14,8 @@ import java.util.*
 enum class BookingResponseCode {
     BOOKED,
     FULL,
-    NOT_AVAILABLE
+    NOT_AVAILABLE,
+    LIMIT_REACHED
 }
 
 data class BookingReq(
@@ -71,13 +72,11 @@ class Client(
         if (scheduleEntry.notAvailable) return BookingResponseCode.NOT_AVAILABLE
 
         // register
-        try {
+        return try {
             register(scheduleEntry)
         } catch (e: Exception) {
             throw Exception("err registering : $e")
         }
-
-        return BookingResponseCode.BOOKED
     }
 
     private fun authIfRequired() {
@@ -229,7 +228,7 @@ class Client(
         throw Exception("could not find entry for this time")
     }
 
-    private fun register(scheduleEntry: ScheduleEntry) {
+    private fun register(scheduleEntry: ScheduleEntry): BookingResponseCode {
         val reqBody = FormBody.Builder()
             .add("subscription-id", scheduleEntry.subscriptionId!!)
             .add("calendar-id", scheduleEntry.calenderId!!)
@@ -245,7 +244,10 @@ class Client(
 
         val res = client.newCall(req).execute()
 
-        checkAndDebugResAndUnwrapBody(req, res, false)
+        val body = checkAndDebugResAndUnwrapBody(req, res, false)
+        return if (body.contains("membership plan has exceeded its attendance limit of 4 per week"))
+            BookingResponseCode.LIMIT_REACHED
+        else BookingResponseCode.BOOKED
     }
 
     private fun setNewPhpSessionId() {

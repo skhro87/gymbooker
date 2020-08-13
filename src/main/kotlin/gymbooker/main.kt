@@ -48,36 +48,32 @@ private fun run(statePath: String, client: Client, debugAll: Boolean) {
             println("loaded state with ${state.requests.size} from disc at ${now()}")
 
         (1..100).forEach { _ ->
-            state.requests
-                .filter { r ->
-                    r.resCode != BookingResponseCode.BOOKED &&
-                            r.resCode != BookingResponseCode.FULL
-                }
-                .forEachIndexed { i, r ->
-                    try {
-                        if (!shouldMakeReq(r, debugAll))
-                            return@forEachIndexed
-                    } catch (e: Exception) {
-                        println("err checking if should make req : $e")
-                        Thread.sleep(5000)
+            state.requests.forEachIndexed { i, r ->
+                try {
+                    if (!shouldMakeReq(r, debugAll))
                         return@forEachIndexed
-                    }
-
-                    println("starting booking request $r")
-
-                    state.requests[i].resCode = try {
-                        client.Book(r)
-                    } catch (e: Exception) {
-                        println("err booking request $r : $e")
-                        return@forEachIndexed
-                    }
-
-                    println("booking request $r result is ${r.resCode}")
-
-                    writeState(statePath, state)
-
-                    Thread.sleep(1000)
+                } catch (e: Exception) {
+                    println("err checking if should make req : $e")
+                    Thread.sleep(5000)
+                    return@forEachIndexed
                 }
+
+                println("starting booking request $r")
+
+                val resCode = try {
+                    client.Book(r)
+                } catch (e: Exception) {
+                    println("err booking request $r : $e")
+                    return@forEachIndexed
+                }
+
+                println("booking request $r result is $resCode")
+
+                state.requests[i].resCode = resCode
+                writeState(statePath, state)
+
+                Thread.sleep(1000)
+            }
         }
 
         Thread.sleep(500)
@@ -85,18 +81,29 @@ private fun run(statePath: String, client: Client, debugAll: Boolean) {
 }
 
 private fun shouldMakeReq(r: BookingReq, debugAll: Boolean): Boolean {
+    if (r.resCode == BookingResponseCode.BOOKED ||
+        r.resCode == BookingResponseCode.LIMIT_REACHED ||
+        r.resCode == BookingResponseCode.FULL
+    ) {
+        if (debugAll) println("skipping request as code is ${r.resCode}")
+        return false
+    }
+
+
     val formatter = DateTimeFormat.forPattern("yyyy-D HH:mma")
     val timeReqRaw = "${r.year}-${r.dayOfYear} ${r.time.replace(" ", "")}"
-    val timeReq = formatter.parseDateTime(timeReqRaw)
-
+    val timeReq = formatter.withZone(DateTimeZone.forID("Asia/Singapore")).parseDateTime(timeReqRaw)
     val now = now()
+
+    val shouldMakeReq = now.isAfter(timeReq)
 
     if (debugAll) {
         println("requested (-1 day): $timeReq")
         println("now: $now")
+        println("should make request? $shouldMakeReq")
     }
 
-    return now.isAfter(timeReq)
+    return shouldMakeReq
 }
 
 private fun loadState(statePath: String): GymBookerState {
