@@ -90,7 +90,7 @@ private fun shouldMakeReq(r: BookingReq, debugAll: Boolean): Boolean {
     }
 
 
-    val formatter = DateTimeFormat.forPattern("yyyy-D HH:mma")
+    val formatter = DateTimeFormat.forPattern("yyyy-D hh:mma")
     val timeReqRaw = "${r.year}-${r.dayOfYear} ${r.time.replace(" ", "")}"
     val timeReq = formatter.withZone(DateTimeZone.forID("Asia/Singapore")).parseDateTime(timeReqRaw)
     val now = now()
