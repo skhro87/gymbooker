@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import gymbooker.pushpress.BookingReq
 import gymbooker.pushpress.BookingResponseCode
 import gymbooker.pushpress.Client
+import gymbooker.pushpress.IClient
 import org.joda.time.DateTime
 import org.joda.time.DateTimeZone
 import org.joda.time.format.DateTimeFormat
@@ -34,49 +35,77 @@ fun main() {
     println("all done")
 }
 
-private fun run(statePath: String, client: Client, debugAll: Boolean) {
+private fun run(statePath: String, client: IClient, debugAll: Boolean) {
+    var lastRefreshed: DateTime? = null
+    var state: GymBookerState? = null
+    var authValid: Boolean = false
     while (true) {
-        val state = try {
-            loadState(statePath)
-        } catch (e: Exception) {
-            println("err loading state : $e")
-            Thread.sleep(10000)
-            continue
-        }
-
-        if (debugAll)
-            println("loaded state with ${state.requests.size} from disc at ${now()}")
-
-        (1..100).forEach { _ ->
-            state.requests.forEachIndexed { i, r ->
-                try {
-                    if (!shouldMakeReq(r, debugAll))
-                        return@forEachIndexed
-                } catch (e: Exception) {
-                    println("err checking if should make req : $e")
-                    Thread.sleep(5000)
-                    return@forEachIndexed
-                }
-
-                println("starting booking request $r")
-
-                val resCode = try {
-                    client.Book(r)
-                } catch (e: Exception) {
-                    println("err booking request $r : $e")
-                    return@forEachIndexed
-                }
-
-                println("booking request $r result is $resCode")
-
-                state.requests[i].resCode = resCode
-                writeState(statePath, state)
-
-                Thread.sleep(1000)
-            }
-        }
-
         Thread.sleep(500)
+
+        // refresh
+        if (lastRefreshed == null || state == null || !authValid ||
+            now().minusMinutes(1).isAfter(lastRefreshed)
+        ) {
+            if (debugAll)
+                println("refreshing (last refresh was $lastRefreshed)")
+
+            state = try {
+                if (debugAll)
+                    println("loading state from disk")
+
+                loadState(statePath)
+            } catch (e: Exception) {
+                println("err loading state : $e")
+                Thread.sleep(10000)
+                continue
+            }
+
+            authValid = try {
+                if (debugAll)
+                    println("doing auth if required")
+
+                client.AuthIfRequired()
+            } catch (e: Exception) {
+                println("err doing auth if required : $e")
+                Thread.sleep(10000)
+                continue
+            }
+
+            if (debugAll)
+                println("loaded state with ${state.requests.size} from disc at ${now()}")
+
+            lastRefreshed = now()
+        } else {
+            if (debugAll)
+                println("no refresh required (last: $lastRefreshed, now: ${now()})")
+        }
+
+        state.requests.forEachIndexed { i, r ->
+            try {
+                if (!shouldMakeReq(r, debugAll))
+                    return@forEachIndexed
+            } catch (e: Exception) {
+                println("err checking if should make req : $e")
+                Thread.sleep(5000)
+                return@forEachIndexed
+            }
+
+            println("starting booking request $r")
+
+            val resCode = try {
+                client.Book(r)
+            } catch (e: Exception) {
+                println("err booking request $r : $e")
+                return@forEachIndexed
+            }
+
+            println("booking request $r result is $resCode")
+
+            state.requests[i].resCode = resCode
+            writeState(statePath, state)
+
+            Thread.sleep(1000)
+        }
     }
 }
 
@@ -88,7 +117,6 @@ private fun shouldMakeReq(r: BookingReq, debugAll: Boolean): Boolean {
         if (debugAll) println("skipping request as code is ${r.resCode}")
         return false
     }
-
 
     val formatter = DateTimeFormat.forPattern("yyyy-D hh:mma")
     val timeReqRaw = "${r.year}-${r.dayOfYear} ${r.time.replace(" ", "")}"

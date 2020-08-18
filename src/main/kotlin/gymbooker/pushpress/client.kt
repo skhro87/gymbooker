@@ -36,6 +36,7 @@ private data class ScheduleEntry(
 
 interface IClient {
     fun Book(bookingReq: BookingReq): BookingResponseCode
+    fun AuthIfRequired(): Boolean
 }
 
 class Client(
@@ -55,7 +56,7 @@ class Client(
     override fun Book(bookingReq: BookingReq): BookingResponseCode {
         // auth if required
         try {
-            authIfRequired()
+            AuthIfRequired()
         } catch (e: Exception) {
             throw Exception("err doing auth if required : $e")
         }
@@ -79,13 +80,13 @@ class Client(
         }
     }
 
-    private fun authIfRequired() {
+    override fun AuthIfRequired(): Boolean {
         // check login status
         try {
             if (debugAll) println("checking auth")
             if (hasAuth()) {
                 if (debugAll) println("auth still ok")
-                return
+                return true
             }
         } catch (e: Exception) {
             Thread.sleep(5000)
@@ -106,7 +107,9 @@ class Client(
         try {
             if (hasAuth()) {
                 if (debugAll) println("auth ok")
-                return
+                return true
+            } else {
+                throw Exception("no auth after successful auth")
             }
         } catch (e: Exception) {
             Thread.sleep(5000)
